@@ -1,10 +1,97 @@
+#include "vec.h"
+#include "ray.h"
 #include <stdio.h>
+
+void write_color_stdout(vec3 pixel_color)
+{
+  int ir = (int) (255.999*pixel_color.x);
+  int ig = (int) (255.999*pixel_color.y);
+  int ib = (int) (255.999*pixel_color.z);
+
+  printf("%d %d %d\n", ir, ig, ib);
+}
+
+int hit_sphere(vec3 center, double radius, ray r)
+{
+  vec3 oc = vec3_add(r.origin, vec3_neg(center));
+  double a = vec3_length_squared(r.direction);
+  double b = 2.0 * vec3_dot(oc, r.direction);
+  double c = vec3_length_squared(oc) - radius*radius;
+
+  double discriminant = b*b - 4*a*c;
+  return (discriminant > 0)? 1: 0;
+}
+
+vec3 ray_color(ray r)
+{
+
+  vec3 c;
+  c.x = 0; c.y = 0; c.z = -1;
+  double radius = 0.5;
+
+  if (hit_sphere(c, radius, r) == 1)
+  {
+    vec3 color;
+	color.x = 1; color.y = 0; color.z = 0;
+	return color;
+  }
+
+  vec3 unit_direction = vec3_unit_vector(r.direction);
+  
+  vec3 color1;
+  color1.x = 1.0; color1.y = 1.0; color1.z = 1.0;
+
+  vec3 color2;
+  color2.x = 0.5; color2.y = 0.7; color2.z = 1.0;
+
+  double t = 0.5 * (unit_direction.y + 1.0);
+  return vec3_add(
+    vec3_scale(color1, 1.0-t),
+	vec3_scale(color2, t)
+  );
+}
 
 int main()
 {
   // image
-  const int image_width = 256;
-  const int image_height = 256;
+  const double aspect_ratio = 16.0 / 9.0;
+  const int image_width = 400;
+  const int image_height = (int) (image_width / aspect_ratio);
+
+  // camera
+  
+  double viewport_height = 2.0;
+  double viewport_width = aspect_ratio * viewport_height;
+  double focal_length = 1.0;
+
+  vec3 origin;
+  origin.x = 0;
+  origin.y = 0;
+  origin.z = 0;
+
+  vec3 horizontal;
+  horizontal.x = viewport_width; horizontal.y = 0; horizontal.z = 0;
+
+  vec3 vertical;
+  vertical.x = 0; vertical.y = viewport_height; vertical.z = 0;
+
+  vec3 origin_to_image_plane_center;
+  origin_to_image_plane_center.x = 0;
+  origin_to_image_plane_center.y = 0;
+  origin_to_image_plane_center.z = focal_length;
+
+  // origin - 0.5*horizontal - 0.5*vertical - origin_to_image_plane_center
+  vec3 lower_left_corner = vec3_add(
+    origin, vec3_neg(
+      vec3_add(
+        vec3_add(
+          vec3_scale(horizontal, 0.5),
+		  vec3_scale(vertical, 0.5)
+        ), 
+		origin_to_image_plane_center
+	  )
+    )
+  );
 
   // render
   printf("P3\n%d %d\n255\n", image_width, image_height);
@@ -15,15 +102,26 @@ int main()
     fflush(stderr);
     for (int i = 0; i<image_width; ++i)
 	{
-      double r = ((double) i) / (image_width-1);
-      double g = ((double) j) / (image_height-1);
-      double b = 0.25;
 
-	  int ir = (int) (255.999*r);
-	  int ig = (int) (255.999*g);
-	  int ib = (int) (255.999*b);
+      double u = ((double) i) / (image_width-1);
+      double v = ((double) j) / (image_height-1);
 
-      printf("%d %d %d\n", ir, ig, ib);
+	  ray r;
+	  r.origin = origin;
+	  // lower_left_corner + u*horizontal + v*vertical - origin
+      r.direction = vec3_add(
+        vec3_add(
+          vec3_add(
+			vec3_scale(horizontal, u),
+            vec3_neg(origin)
+		  ),
+		  vec3_scale(vertical, v)
+		),
+	  lower_left_corner
+	  );
+
+	  vec3 color = ray_color(r);
+	  write_color_stdout(color);
 	}
   }
   fprintf(stderr, "\nDone.\n");
