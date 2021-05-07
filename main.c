@@ -11,7 +11,7 @@ void write_color_stdout(vec3 pixel_color)
   printf("%d %d %d\n", ir, ig, ib);
 }
 
-int hit_sphere(vec3 center, double radius, ray r)
+double hit_sphere(vec3 center, double radius, ray r)
 {
   vec3 oc = vec3_add(r.origin, vec3_neg(center));
   double a = vec3_length_squared(r.direction);
@@ -19,7 +19,12 @@ int hit_sphere(vec3 center, double radius, ray r)
   double c = vec3_length_squared(oc) - radius*radius;
 
   double discriminant = b*b - 4*a*c;
-  return (discriminant > 0)? 1: 0;
+  if (discriminant < 0)
+  {
+    return -1.0;
+  } else {
+    return (-b - sqrt(discriminant) ) / (2.0 * a);
+  }
 }
 
 vec3 ray_color(ray r)
@@ -29,22 +34,27 @@ vec3 ray_color(ray r)
   c.x = 0; c.y = 0; c.z = -1;
   double radius = 0.5;
 
-  if (hit_sphere(c, radius, r) == 1)
+  double t = hit_sphere(c, radius, r);
+  if (t > 0.0)
   {
-    vec3 color;
-	color.x = 1; color.y = 0; color.z = 0;
-	return color;
+    vec3 unit_vector = vec3_unit_vector(vec3_subtract(ray_point_at(r, t), c));
+	vec3 color;
+	color.x = unit_vector.x + 1.0;
+	color.y = unit_vector.y + 1.0;
+	color.z = unit_vector.z + 1.0;
+	return vec3_scale(color, 0.5);
   }
 
   vec3 unit_direction = vec3_unit_vector(r.direction);
-  
+  t = 0.5 * (unit_direction.y + 1.0);
+
   vec3 color1;
   color1.x = 1.0; color1.y = 1.0; color1.z = 1.0;
 
   vec3 color2;
   color2.x = 0.5; color2.y = 0.7; color2.z = 1.0;
 
-  double t = 0.5 * (unit_direction.y + 1.0);
+  t = 0.5 * (unit_direction.y + 1.0);
   return vec3_add(
     vec3_scale(color1, 1.0-t),
 	vec3_scale(color2, t)
