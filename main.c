@@ -38,11 +38,11 @@ vec3 ray_color(ray r)
   if (t > 0.0)
   {
     vec3 unit_vector = vec3_unit_vector(vec3_subtract(ray_point_at(r, t), c));
-	vec3 color;
-	color.x = unit_vector.x + 1.0;
-	color.y = unit_vector.y + 1.0;
-	color.z = unit_vector.z + 1.0;
-	return vec3_scale(color, 0.5);
+  vec3 color;
+  color.x = unit_vector.x + 1.0;
+  color.y = unit_vector.y + 1.0;
+  color.z = unit_vector.z + 1.0;
+  return vec3_scale(color, 0.5);
   }
 
   vec3 unit_direction = vec3_unit_vector(r.direction);
@@ -57,7 +57,7 @@ vec3 ray_color(ray r)
   t = 0.5 * (unit_direction.y + 1.0);
   return vec3_add(
     vec3_scale(color1, 1.0-t),
-	vec3_scale(color2, t)
+    vec3_scale(color2, t)
   );
 }
 
@@ -96,10 +96,10 @@ int main()
       vec3_add(
         vec3_add(
           vec3_scale(horizontal, 0.5),
-		  vec3_scale(vertical, 0.5)
+          vec3_scale(vertical, 0.5)
         ), 
-		origin_to_image_plane_center
-	  )
+        origin_to_image_plane_center
+      )
     )
   );
 
@@ -111,28 +111,28 @@ int main()
     fprintf(stderr, "Line %d of %d.\r", image_height-j, image_height);
     fflush(stderr);
     for (int i = 0; i<image_width; ++i)
-	{
+    {
 
       double u = ((double) i) / (image_width-1);
       double v = ((double) j) / (image_height-1);
 
-	  ray r;
-	  r.origin = origin;
-	  // lower_left_corner + u*horizontal + v*vertical - origin
+      ray r;
+      r.origin = origin;
+      // lower_left_corner + u*horizontal + v*vertical - origin
       r.direction = vec3_add(
         vec3_add(
           vec3_add(
-			vec3_scale(horizontal, u),
+            vec3_scale(horizontal, u),
             vec3_neg(origin)
-		  ),
-		  vec3_scale(vertical, v)
-		),
-	  lower_left_corner
-	  );
+          ),
+          vec3_scale(vertical, v)
+        ),
+        lower_left_corner
+      );
 
-	  vec3 color = ray_color(r);
-	  write_color_stdout(color);
-	}
+     vec3 color = ray_color(r);
+     write_color_stdout(color);
+     }
   }
   fprintf(stderr, "\nDone.\n");
 }
