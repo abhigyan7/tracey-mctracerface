@@ -13,17 +13,17 @@ void write_color_stdout(vec3 pixel_color)
 
 double hit_sphere(vec3 center, double radius, ray r)
 {
-  vec3 oc = vec3_add(r.origin, vec3_neg(center));
+  vec3 oc = vec3_subtract(r.origin, center);
   double a = vec3_length_squared(r.direction);
-  double b = 2.0 * vec3_dot(oc, r.direction);
+  double half_b = vec3_dot(oc, r.direction);
   double c = vec3_length_squared(oc) - radius*radius;
 
-  double discriminant = b*b - 4*a*c;
+  double discriminant = half_b * half_b - a*c;
   if (discriminant < 0)
   {
     return -1.0;
   } else {
-    return (-b - sqrt(discriminant) ) / (2.0 * a);
+    return (-half_b - sqrt(discriminant) ) / a;
   }
 }
 
