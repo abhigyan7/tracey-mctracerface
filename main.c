@@ -146,6 +146,27 @@ struct hit_record {
   double t;
 };
 
+typedef struct linked_sphere linked_sphere;
+struct linked_sphere {
+  vec3 center;
+  double radius;
+  struct linked_sphere* next;
+};
+
+void add_sphere(linked_sphere* world, vec3 center, double radius)
+{
+  linked_sphere* last_sphere = world->next;
+  while (last_sphere)
+  {
+    last_sphere = last_sphere->next;
+  }
+
+  linked_sphere* new_sphere = malloc(sizeof(linked_sphere));
+  new_sphere->center = center;
+  new_sphere->radius = radius;
+  last_sphere->next = new_sphere;
+}
+
 int hit_sphere(
   vec3 center,  double radius,
   double tmin,  double tmax,
@@ -174,6 +195,7 @@ int hit_sphere(
   hit->normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), center));
   return 1;
 }
+
 void write_color_stdout(vec3 pixel_color)
 {
   int ir = (int) (255.999*pixel_color.x);
@@ -183,18 +205,36 @@ void write_color_stdout(vec3 pixel_color)
   printf("%d %d %d\n", ir, ig, ib);
 }
 
-vec3 ray_color(ray r)
+vec3 ray_color(ray r, linked_sphere* world)
 {
 
-  vec3 c;
-  c.x = 0; c.y = 0; c.z = -1;
-  double radius = 0.5;
+  int ret = 0;
+  hit_record rec;
 
-  hit_record* hit = malloc(sizeof(hit_record));
-  int t = hit_sphere(c, radius, 0, 1000, r, hit);
-  if (t == 1)
+  double min_t = 100000;
+  hit_record min_rec;
+
+  int hit = 0;
+
+  linked_sphere* sphere = world;
+  do {
+    ret = hit_sphere(sphere->center, sphere->radius, 0, 1000, r, &rec);
+    if (ret)
+    {
+      hit = 1;
+      if (rec.t < min_t)
+      {
+        min_t = rec.t;
+        min_rec = rec;
+      }
+    }
+    sphere = sphere->next;
+  } while (sphere);
+
+  if (hit == 1)
   {
-    vec3 unit_vector = hit->normal;
+    //fprintf(stderr, "Hit!\n");
+    vec3 unit_vector = min_rec.normal;
     vec3 color;
     color.x = unit_vector.x + 1.0;
     color.y = unit_vector.y + 1.0;
@@ -203,7 +243,7 @@ vec3 ray_color(ray r)
   }
 
   vec3 unit_direction = vec3_unit_vector(r.direction);
-  t = 0.5 * (unit_direction.y + 1.0);
+  double t = 0.5 * (unit_direction.y + 1.0);
 
   vec3 color1;
   color1.x = 1.0; color1.y = 1.0; color1.z = 1.0;
@@ -230,6 +270,17 @@ int main()
   double viewport_height = 2.0;
   double viewport_width = aspect_ratio * viewport_height;
   double focal_length = 1.0;
+
+  // world
+  linked_sphere* world = malloc(sizeof(linked_sphere));
+  world->center = vec3_new(0, 0, -1);
+  world->radius = 0.5;
+  world->next = NULL;
+
+  world->next = malloc(sizeof(linked_sphere));
+  world->next->center = vec3_new(0, -100.5, -1);
+  world->next->radius = 100;
+  world->next->next = NULL;
 
   vec3 origin;
   origin.x = 0;
@@ -287,10 +338,11 @@ int main()
         lower_left_corner
       );
 
-     vec3 color = ray_color(r);
+     vec3 color = ray_color(r, world);
      write_color_stdout(color);
      }
   }
   fprintf(stderr, "\nDone.\n");
 }
 
+//
