@@ -2,6 +2,12 @@
 #include <math.h>
 #include <stdlib.h>
 
+double random_double()
+{
+  // real random in [0,1)
+  return rand() / (RAND_MAX + 1.0);
+}
+
 typedef struct vec3
 {
   double x;
@@ -144,6 +150,7 @@ struct hit_record {
   vec3 p;
   vec3 normal;
   double t;
+  int front_face; // are the normal and the ray acute ? 1:0
 };
 
 typedef struct linked_sphere linked_sphere;
@@ -165,6 +172,12 @@ void add_sphere(linked_sphere* world, vec3 center, double radius)
   new_sphere->center = center;
   new_sphere->radius = radius;
   last_sphere->next = new_sphere;
+}
+
+vec3 sphere_hit_set_face_normal(ray r, vec3 outward_normal)
+{
+  int is_front_face = vec3_dot(r.direction, outward_normal) < 0;
+  return is_front_face ? outward_normal : vec3_neg(outward_normal);
 }
 
 int hit_sphere(
@@ -192,7 +205,8 @@ int hit_sphere(
   }
   hit->t = root;
   hit->p = ray_point_at(r, root);
-  hit->normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), center));
+  vec3 outward_normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), center));
+  hit->normal = sphere_hit_set_face_normal(r,  outward_normal);
   return 1;
 }
 
