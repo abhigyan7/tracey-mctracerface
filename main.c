@@ -16,6 +16,11 @@ double random_double()
   return rand() / (RAND_MAX + 1.0);
 }
 
+double random_double_in_range(double min, double max) {
+    // Returns a random real in [min,max).
+    return min + (max-min)*random_double();
+}
+
 typedef struct vec3
 {
   double x;
@@ -145,9 +150,9 @@ vec3 vec3_unit_vector(vec3 v)
 vec3 vec3_random_uniform(double min, double max)
 {
   return vec3_new(
-    random_double(min, max),
-    random_double(min, max),
-    random_double(min, max)
+    random_double_in_range(min, max),
+    random_double_in_range(min, max),
+    random_double_in_range(min, max)
   );
 }
 
@@ -258,10 +263,10 @@ void write_color_stdout(vec3 pixel_color, int samples_per_pixel)
   double g = pixel_color.y * (1.0 / samples_per_pixel);
   double b = pixel_color.z * (1.0 / samples_per_pixel);
 
-  // clamp to between 0 and 255.999
-  r = 256 * clamp(r, 0.0, 0.99999);
-  g = 256 * clamp(g, 0.0, 0.99999);
-  b = 256 * clamp(b, 0.0, 0.99999);
+  // apply gamma-2 and clamp between 0 and 256
+  r = 256 * clamp(sqrt(r), 0.0, 0.99999);
+  g = 256 * clamp(sqrt(g), 0.0, 0.99999);
+  b = 256 * clamp(sqrt(b), 0.0, 0.99999);
 
   printf("%d %d %d\n", (int) r, (int) g, (int) b);
 }
@@ -281,7 +286,7 @@ vec3 ray_color(ray r, linked_sphere* world, int depth)
 
   linked_sphere* sphere = world;
   do {
-    ret = hit_sphere(sphere->center, sphere->radius, 0, DBL_MAX, r, &rec);
+    ret = hit_sphere(sphere->center, sphere->radius, 0.001, DBL_MAX, r, &rec);
     if (ret)
     {
       hit = 1;
