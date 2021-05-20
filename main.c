@@ -218,13 +218,24 @@ int hit_sphere(
   return 1;
 }
 
-void write_color_stdout(vec3 pixel_color)
+double clamp(double x, double min, double max)
 {
-  int ir = (int) (255.999*pixel_color.x);
-  int ig = (int) (255.999*pixel_color.y);
-  int ib = (int) (255.999*pixel_color.z);
+  if (x < min) return min;
+  if (x > max) return max;
+  return x;
+}
+void write_color_stdout(vec3 pixel_color, int samples_per_pixel)
+{
+  double r = pixel_color.x * (1.0 / samples_per_pixel);
+  double g = pixel_color.y * (1.0 / samples_per_pixel);
+  double b = pixel_color.z * (1.0 / samples_per_pixel);
 
-  printf("%d %d %d\n", ir, ig, ib);
+  // clamp to between 0 and 255.999
+  r = 256 * clamp(r, 0.0, 0.99999);
+  g = 256 * clamp(g, 0.0, 0.99999);
+  b = 256 * clamp(b, 0.0, 0.99999);
+
+  printf("%d %d %d\n", (int) r, (int) g, (int) b);
 }
 
 vec3 ray_color(ray r, linked_sphere* world)
@@ -280,6 +291,71 @@ vec3 ray_color(ray r, linked_sphere* world)
   );
 }
 
+typedef struct camera
+{
+  double aspect_ratio;
+  int image_width, image_height;
+
+  double viewport_height, viewport_width;
+  double focal_length;
+
+  vec3 origin;
+  vec3 horizontal, vertical;
+  vec3 lower_left_corner;
+} camera;
+
+camera camera_new_default()
+{
+  camera ret;
+  ret.aspect_ratio = 16.0 / 9.0;
+  ret.viewport_height = 2.0;
+  ret.viewport_width = ret.aspect_ratio * ret.viewport_height;
+  ret.focal_length = 1.0;
+
+  ret.origin = vec3_new(0, 0, 0);
+  ret.horizontal = vec3_new(ret.viewport_width, 0.0, 0.0);
+  ret.vertical = vec3_new(0.0, ret.viewport_height, 0.0);
+
+  vec3 origin_to_image_plane_center;
+  origin_to_image_plane_center.x = 0;
+  origin_to_image_plane_center.y = 0;
+  origin_to_image_plane_center.z = ret.focal_length;
+
+  // origin - 0.5*horizontal - 0.5*vertical - origin_to_image_plane_center
+  ret.lower_left_corner = vec3_add(
+    ret.origin, vec3_neg(
+      vec3_add(
+        vec3_add(
+          vec3_scale(ret.horizontal, 0.5),
+          vec3_scale(ret.vertical, 0.5)
+        ),
+        origin_to_image_plane_center
+      )
+    )
+  );
+  return ret;
+}
+
+ray camera_get_ray(camera cam, double u, double v)
+{
+  ray ret;
+  ret.origin = cam.origin;
+
+  // lower_left_corner + u*horizontal + v*vertical - origin
+  ret.direction = vec3_add(
+    vec3_add(
+      vec3_add(
+        vec3_scale(cam.horizontal, u),
+        vec3_neg(cam.origin)
+      ),
+      vec3_scale(cam.vertical, v)
+    ),
+    cam.lower_left_corner
+  );
+
+  return ret;
+}
+
 int main()
 {
   // image
@@ -287,11 +363,9 @@ int main()
   const int image_width = 400;
   const int image_height = (int) (image_width / aspect_ratio);
 
-  // camera
-  
-  double viewport_height = 2.0;
-  double viewport_width = aspect_ratio * viewport_height;
-  double focal_length = 1.0;
+  const int samples_per_pixel = 100;
+
+  camera cam = camera_new_default();
 
   // world
   linked_sphere* world = malloc(sizeof(linked_sphere));
@@ -299,41 +373,11 @@ int main()
   world->radius = 0.5;
   world->next = NULL;
 
-  world->next = malloc(sizeof(linked_sphere));
+  world->next = (linked_sphere*) malloc(sizeof(linked_sphere));
   world->next->center = vec3_new(0, -100.5, -1);
   world->next->radius = 100;
   world->next->next = NULL;
 
-  vec3 origin;
-  origin.x = 0;
-  origin.y = 0;
-  origin.z = 0;
-
-  vec3 horizontal;
-  horizontal.x = viewport_width; horizontal.y = 0; horizontal.z = 0;
-
-  vec3 vertical;
-  vertical.x = 0; vertical.y = viewport_height; vertical.z = 0;
-
-  vec3 origin_to_image_plane_center;
-  origin_to_image_plane_center.x = 0;
-  origin_to_image_plane_center.y = 0;
-  origin_to_image_plane_center.z = focal_length;
-
-  // origin - 0.5*horizontal - 0.5*vertical - origin_to_image_plane_center
-  vec3 lower_left_corner = vec3_add(
-    origin, vec3_neg(
-      vec3_add(
-        vec3_add(
-          vec3_scale(horizontal, 0.5),
-          vec3_scale(vertical, 0.5)
-        ), 
-        origin_to_image_plane_center
-      )
-    )
-  );
-
-  // render
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
   for (int j = image_height-1; j>=0; --j)
@@ -342,29 +386,18 @@ int main()
     fflush(stderr);
     for (int i = 0; i<image_width; ++i)
     {
-
-      double u = ((double) i) / (image_width-1);
-      double v = ((double) j) / (image_height-1);
-
-      ray r;
-      r.origin = origin;
-      // lower_left_corner + u*horizontal + v*vertical - origin
-      r.direction = vec3_add(
-        vec3_add(
-          vec3_add(
-            vec3_scale(horizontal, u),
-            vec3_neg(origin)
-          ),
-          vec3_scale(vertical, v)
-        ),
-        lower_left_corner
-      );
-
-     vec3 color = ray_color(r, world);
-     write_color_stdout(color);
+      vec3 px_color = vec3_new_zero();
+      for (int s = 0; s < samples_per_pixel; s++)
+      {
+        double u = ((double) i + random_double()) / (image_width-1);
+        double v = ((double) j + random_double()) / (image_height-1);
+        ray r = camera_get_ray(cam, u, v);
+        vec3 color = ray_color(r, world);
+        px_color = vec3_add(px_color, color);
+      }
+     write_color_stdout(px_color, samples_per_pixel);
      }
   }
   fprintf(stderr, "\nDone.\n");
 }
 
-//
