@@ -142,6 +142,26 @@ vec3 vec3_unit_vector(vec3 v)
   return ret;
 }
 
+vec3 vec3_random_uniform(double min, double max)
+{
+  return vec3_new(
+    random_double(min, max),
+    random_double(min, max),
+    random_double(min, max)
+  );
+}
+
+vec3 vec3_random_in_unit_sphere()
+{
+  while(1)
+  {
+    vec3 p = vec3_random_uniform(-1.0, 1.0);
+    if (vec3_length_squared(p) >= 1)
+      continue;
+    return p;
+  }
+}
+
 typedef struct ray
 {
   vec3 origin;
@@ -151,6 +171,14 @@ typedef struct ray
 vec3 ray_point_at(ray r, double t)
 {
   return vec3_add(r.origin, vec3_scale(r.direction, t));
+}
+
+ray ray_new(vec3 origin, vec3 direction)
+{
+  ray ret;
+  ret.origin = origin;
+  ret.direction = direction;
+  return ret;
 }
 
 typedef struct hit_record hit_record;
@@ -238,8 +266,10 @@ void write_color_stdout(vec3 pixel_color, int samples_per_pixel)
   printf("%d %d %d\n", (int) r, (int) g, (int) b);
 }
 
-vec3 ray_color(ray r, linked_sphere* world)
+vec3 ray_color(ray r, linked_sphere* world, int depth)
 {
+  // max depth reached, no more rays
+  if (depth <= 0) return vec3_new_zero();
 
   int ret = 0;
   hit_record rec;
@@ -267,12 +297,10 @@ vec3 ray_color(ray r, linked_sphere* world)
   if (hit == 1)
   {
     //fprintf(stderr, "Hit!\n");
-    vec3 unit_vector = min_rec.normal;
-    vec3 color;
-    color.x = unit_vector.x + 1.0;
-    color.y = unit_vector.y + 1.0;
-    color.z = unit_vector.z + 1.0;
-    return vec3_scale(color, 0.5);
+    vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_sphere());
+    return vec3_scale(
+      ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), world, depth-1),
+      0.5);
   }
 
   vec3 unit_direction = vec3_unit_vector(r.direction);
@@ -364,6 +392,7 @@ int main()
   const int image_height = (int) (image_width / aspect_ratio);
 
   const int samples_per_pixel = 100;
+  const int max_depth = 50;
 
   camera cam = camera_new_default();
 
@@ -392,7 +421,7 @@ int main()
         double u = ((double) i + random_double()) / (image_width-1);
         double v = ((double) j + random_double()) / (image_height-1);
         ray r = camera_get_ray(cam, u, v);
-        vec3 color = ray_color(r, world);
+        vec3 color = ray_color(r, world, max_depth);
         px_color = vec3_add(px_color, color);
       }
      write_color_stdout(px_color, samples_per_pixel);
