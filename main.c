@@ -1,6 +1,14 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <float.h>
+
+const double PI = 3.1415926535897932385;
+
+double degrees_to_radians(double degrees)
+{
+  return degrees * PI / 180.0;
+}
 
 double random_double()
 {
@@ -232,7 +240,7 @@ vec3 ray_color(ray r, linked_sphere* world)
 
   linked_sphere* sphere = world;
   do {
-    ret = hit_sphere(sphere->center, sphere->radius, 0, 1000, r, &rec);
+    ret = hit_sphere(sphere->center, sphere->radius, 0, DBL_MAX, r, &rec);
     if (ret)
     {
       hit = 1;
