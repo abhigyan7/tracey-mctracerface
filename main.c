@@ -167,6 +167,19 @@ vec3 vec3_random_in_unit_sphere()
   }
 }
 
+vec3 vec3_random_unit_vector()
+{
+  return vec3_unit_vector(vec3_random_in_unit_sphere());
+}
+
+vec3 vec3_random_in_unit_hemisphere(vec3 normal)
+{
+  vec3 ret = vec3_random_in_unit_sphere();
+  if (vec3_dot(ret, normal) > 0.0)
+    return vec3_neg(ret);
+  return ret;
+}
+
 typedef struct ray
 {
   vec3 origin;
@@ -302,7 +315,7 @@ vec3 ray_color(ray r, linked_sphere* world, int depth)
   if (hit == 1)
   {
     //fprintf(stderr, "Hit!\n");
-    vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_sphere());
+    vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_hemisphere(min_rec.normal));
     return vec3_scale(
       ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), world, depth-1),
       0.5);
