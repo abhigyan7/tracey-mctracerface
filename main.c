@@ -207,26 +207,14 @@ struct hit_record {
   int front_face; // are the normal and the ray acute ? 1:0
 };
 
-typedef struct linked_sphere linked_sphere;
-struct linked_sphere {
+typedef struct sphere sphere;
+
+struct sphere
+{
   vec3 center;
   double radius;
-  struct linked_sphere* next;
 };
 
-void add_sphere(linked_sphere* world, vec3 center, double radius)
-{
-  linked_sphere* last_sphere = world->next;
-  while (last_sphere)
-  {
-    last_sphere = last_sphere->next;
-  }
-
-  linked_sphere* new_sphere = malloc(sizeof(linked_sphere));
-  new_sphere->center = center;
-  new_sphere->radius = radius;
-  last_sphere->next = new_sphere;
-}
 
 vec3 sphere_hit_set_face_normal(ray r, vec3 outward_normal)
 {
@@ -270,6 +258,7 @@ double clamp(double x, double min, double max)
   if (x > max) return max;
   return x;
 }
+
 void write_color_stdout(vec3 pixel_color, int samples_per_pixel)
 {
   double r = pixel_color.x * (1.0 / samples_per_pixel);
@@ -284,8 +273,17 @@ void write_color_stdout(vec3 pixel_color, int samples_per_pixel)
   printf("%d %d %d\n", (int) r, (int) g, (int) b);
 }
 
-vec3 ray_color(ray r, linked_sphere* world, int depth)
+typedef struct world world;
+
+struct world
 {
+  int n_objects;
+  sphere* spheres;
+};
+
+vec3 ray_color(ray r, world w, int depth)
+{
+
   // max depth reached, no more rays
   if (depth <= 0) return vec3_new_zero();
 
@@ -297,9 +295,9 @@ vec3 ray_color(ray r, linked_sphere* world, int depth)
 
   int hit = 0;
 
-  linked_sphere* sphere = world;
-  do {
-    ret = hit_sphere(sphere->center, sphere->radius, 0.001, DBL_MAX, r, &rec);
+  for (int i = 0; i<w.n_objects; i++)
+  {
+    ret = hit_sphere(w.spheres[i].center, w.spheres[i].radius, 0.001, DBL_MAX, r, &rec);
     if (ret)
     {
       hit = 1;
@@ -309,15 +307,13 @@ vec3 ray_color(ray r, linked_sphere* world, int depth)
         min_rec = rec;
       }
     }
-    sphere = sphere->next;
-  } while (sphere);
+  }
 
   if (hit == 1)
   {
-    //fprintf(stderr, "Hit!\n");
     vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_hemisphere(min_rec.normal));
     return vec3_scale(
-      ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), world, depth-1),
+      ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), w, depth-1),
       0.5);
   }
 
@@ -415,15 +411,22 @@ int main()
   camera cam = camera_new_default();
 
   // world
-  linked_sphere* world = malloc(sizeof(linked_sphere));
-  world->center = vec3_new(0, 0, -1);
-  world->radius = 0.5;
-  world->next = NULL;
+  world w;
+  w.n_objects = 2;
 
-  world->next = (linked_sphere*) malloc(sizeof(linked_sphere));
-  world->next->center = vec3_new(0, -100.5, -1);
-  world->next->radius = 100;
-  world->next->next = NULL;
+  sphere sphere1 =
+  {
+  vec3_new(0, 0, -1),
+  0.5
+  };
+
+  sphere sphere2 =
+  {
+  vec3_new(0, -100.5, -1),
+  100
+  };
+
+  w.spheres = (sphere[]) {sphere1, sphere2};
 
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
@@ -439,7 +442,7 @@ int main()
         double u = ((double) i + random_double()) / (image_width-1);
         double v = ((double) j + random_double()) / (image_height-1);
         ray r = camera_get_ray(cam, u, v);
-        vec3 color = ray_color(r, world, max_depth);
+        vec3 color = ray_color(r, w, max_depth);
         px_color = vec3_add(px_color, color);
       }
      write_color_stdout(px_color, samples_per_pixel);
@@ -447,4 +450,3 @@ int main()
   }
   fprintf(stderr, "\nDone.\n");
 }
-
