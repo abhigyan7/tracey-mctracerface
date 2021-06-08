@@ -288,10 +288,22 @@ vec3 ray_color(ray r, world w, int depth)
   if (depth <= 0) return vec3_new_zero();
 
   int ret = 0;
-  hit_record rec;
+  hit_record rec =
+  {
+    vec3_new_zero(),
+    vec3_new_zero(),
+    0.0,
+    0,
+  };
 
   double min_t = 100000;
-  hit_record min_rec;
+  hit_record min_rec =
+  {
+    vec3_new_zero(),
+    vec3_new_zero(),
+    0.0,
+    0
+  };
 
   int hit = 0;
 
@@ -416,14 +428,14 @@ int main()
 
   sphere sphere1 =
   {
-  vec3_new(0, 0, -1),
-  0.5
+    vec3_new(0, 0, -1),
+    0.5
   };
 
   sphere sphere2 =
   {
-  vec3_new(0, -100.5, -1),
-  100
+    vec3_new(0, -100.5, -1),
+    100
   };
 
   w.spheres = (sphere[]) {sphere1, sphere2};
