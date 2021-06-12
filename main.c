@@ -122,6 +122,15 @@ vec3 vec3_subtract(vec3 a, vec3 b)
   return ret;
 }
 
+vec3 vec3_elementwise_multiply(vec3 a, vec3 b)
+{
+  vec3 ret;
+  ret.x = a.x * b.x;
+  ret.y = a.y * b.y;
+  ret.z = a.z * b.z;
+  return ret;
+}
+
 vec3 vec3_cross(vec3 a, vec3 b)
 {
   vec3 ret;
@@ -199,12 +208,19 @@ ray ray_new(vec3 origin, vec3 direction)
   return ret;
 }
 
+typedef struct material material;
+struct material {
+  int type;
+  vec3 color;
+};
+
 typedef struct hit_record hit_record;
 struct hit_record {
   vec3 p;
   vec3 normal;
   double t;
   int front_face; // are the normal and the ray acute ? 1:0
+  material mat;
 };
 
 typedef struct sphere sphere;
@@ -213,8 +229,8 @@ struct sphere
 {
   vec3 center;
   double radius;
+  material mat;
 };
-
 
 vec3 sphere_hit_set_face_normal(ray r, vec3 outward_normal)
 {
@@ -223,16 +239,16 @@ vec3 sphere_hit_set_face_normal(ray r, vec3 outward_normal)
 }
 
 int hit_sphere(
-  vec3 center,  double radius,
+  sphere s,
   double tmin,  double tmax,
   ray r,
   hit_record *hit
 )
 {
-  vec3 oc = vec3_subtract(r.origin, center);
+  vec3 oc = vec3_subtract(r.origin, s.center);
   double a = vec3_length_squared(r.direction);
   double half_b = vec3_dot(oc, r.direction);
-  double c = vec3_length_squared(oc) - radius*radius;
+  double c = vec3_length_squared(oc) - s.radius*s.radius;
 
   double discriminant = half_b * half_b - a*c;
   if (discriminant < 0) return 0;
@@ -247,8 +263,9 @@ int hit_sphere(
   }
   hit->t = root;
   hit->p = ray_point_at(r, root);
-  vec3 outward_normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), center));
+  vec3 outward_normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), s.center));
   hit->normal = sphere_hit_set_face_normal(r,  outward_normal);
+  hit->mat = s.mat;
   return 1;
 }
 
@@ -281,6 +298,18 @@ struct world
   sphere* spheres;
 };
 
+int scatter(vec3 at, vec3 normal, material mat, ray* scattered_ray)
+{
+  switch (mat.type)
+  {
+    case 1:
+      break;
+  }
+  vec3 scatter_direction = vec3_add(normal, vec3_random_unit_vector());
+  *scattered_ray = ray_new(at, scatter_direction);
+  return 1;
+}
+
 vec3 ray_color(ray r, world w, int depth)
 {
 
@@ -288,28 +317,16 @@ vec3 ray_color(ray r, world w, int depth)
   if (depth <= 0) return vec3_new_zero();
 
   int ret = 0;
-  hit_record rec =
-  {
-    vec3_new_zero(),
-    vec3_new_zero(),
-    0.0,
-    0,
-  };
+  hit_record rec;
 
   double min_t = 100000;
-  hit_record min_rec =
-  {
-    vec3_new_zero(),
-    vec3_new_zero(),
-    0.0,
-    0
-  };
+  hit_record min_rec;
 
   int hit = 0;
 
   for (int i = 0; i<w.n_objects; i++)
   {
-    ret = hit_sphere(w.spheres[i].center, w.spheres[i].radius, 0.001, DBL_MAX, r, &rec);
+    ret = hit_sphere(w.spheres[i], 0.001, DBL_MAX, r, &rec);
     if (ret)
     {
       hit = 1;
@@ -324,9 +341,16 @@ vec3 ray_color(ray r, world w, int depth)
   if (hit == 1)
   {
     vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_hemisphere(min_rec.normal));
-    return vec3_scale(
+    ray r;
+    int did_the_ray_scatter = scatter(min_rec.p, min_rec.normal, min_rec.mat, &r);
+    if (did_the_ray_scatter)
+    {
+     return vec3_scale(
       ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), w, depth-1),
       0.5);
+    } else {
+      return vec3_new(0.0, 0.0, 0.0);
+    }
   }
 
   vec3 unit_direction = vec3_unit_vector(r.direction);
@@ -426,16 +450,24 @@ int main()
   world w;
   w.n_objects = 2;
 
+  // materials
+  material mat_lambert_1 = {
+    1,
+    vec3_new(1.0, 0.0, 1.0)
+  };
+
   sphere sphere1 =
   {
     vec3_new(0, 0, -1),
-    0.5
+    0.5,
+    mat_lambert_1
   };
 
   sphere sphere2 =
   {
     vec3_new(0, -100.5, -1),
-    100
+    100,
+    mat_lambert_1
   };
 
   w.spheres = (sphere[]) {sphere1, sphere2};
