@@ -192,12 +192,12 @@ vec3 vec3_random_in_unit_hemisphere(vec3 normal)
 
 int vec3_near_zero(vec3 v)
 {
-  return (fabs(v.x) < eps && fabs(v.y) < eps && fabs(v.z) < eps );
+  return ((fabs(v.x) < eps) && (fabs(v.y) < eps) && (fabs(v.z) < eps));
 }
 
 vec3 reflect(vec3 vec, vec3 normal)
 {
-  return vec3_subtract(vec, vec3_scale(normal, vec3_dot(vec, normal)));
+  return vec3_subtract(vec, vec3_scale(normal, 2*vec3_dot(vec, normal)));
 }
 
 typedef struct ray
