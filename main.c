@@ -4,6 +4,7 @@
 #include <float.h>
 
 const double PI = 3.1415926535897932385;
+const double eps = 1e-8;
 
 double degrees_to_radians(double degrees)
 {
@@ -189,6 +190,16 @@ vec3 vec3_random_in_unit_hemisphere(vec3 normal)
   return ret;
 }
 
+int vec3_near_zero(vec3 v)
+{
+  return (fabs(v.x) < eps && fabs(v.y) < eps && fabs(v.z) < eps );
+}
+
+vec3 reflect(vec3 vec, vec3 normal)
+{
+  return vec3_subtract(vec, vec3_scale(normal, vec3_dot(vec, normal)));
+}
+
 typedef struct ray
 {
   vec3 origin;
@@ -208,10 +219,12 @@ ray ray_new(vec3 origin, vec3 direction)
   return ret;
 }
 
+enum { MAT_LAMBERT, MAT_METAL };
+
 typedef struct material material;
 struct material {
   int type;
-  vec3 color;
+  vec3 albedo;
 };
 
 typedef struct hit_record hit_record;
@@ -298,16 +311,28 @@ struct world
   sphere* spheres;
 };
 
-int scatter(vec3 at, vec3 normal, material mat, ray* scattered_ray)
+int scatter(ray in_ray, vec3 at, vec3 normal, material mat, ray* scattered_ray)
 {
+  int ret;
   switch (mat.type)
   {
-    case 1:
+    case MAT_LAMBERT:
+      vec3 scatter_direction = vec3_add(normal, vec3_random_unit_vector());
+      if (vec3_near_zero(scatter_direction))
+      {
+        scatter_direction = normal;
+      }
+      *scattered_ray = ray_new(at, scatter_direction);
+      ret = 1;
+      break;
+
+    case MAT_METAL:
+      vec3 reflected = reflect(vec3_unit_vector(in_ray.direction), normal);
+      *scattered_ray = ray_new(at, reflected);
+      ret = (vec3_dot(scattered_ray->direction, normal) > 0);
       break;
   }
-  vec3 scatter_direction = vec3_add(normal, vec3_random_unit_vector());
-  *scattered_ray = ray_new(at, scatter_direction);
-  return 1;
+  return ret;
 }
 
 vec3 ray_color(ray r, world w, int depth)
@@ -340,14 +365,13 @@ vec3 ray_color(ray r, world w, int depth)
 
   if (hit == 1)
   {
-    vec3 target = vec3_add(vec3_add(min_rec.p, min_rec.normal), vec3_random_in_unit_hemisphere(min_rec.normal));
-    ray r;
-    int did_the_ray_scatter = scatter(min_rec.p, min_rec.normal, min_rec.mat, &r);
+    ray scattered_ray;
+    int did_the_ray_scatter = scatter(r, min_rec.p, min_rec.normal, min_rec.mat, &scattered_ray);
     if (did_the_ray_scatter)
     {
-     return vec3_scale(
-      ray_color(ray_new(min_rec.p, vec3_subtract(target, min_rec.p)), w, depth-1),
-      0.5);
+      return vec3_elementwise_multiply(
+        ray_color(scattered_ray, w, depth-1),
+      min_rec.mat.albedo);
     } else {
       return vec3_new(0.0, 0.0, 0.0);
     }
@@ -441,36 +465,66 @@ int main()
   const int image_width = 400;
   const int image_height = (int) (image_width / aspect_ratio);
 
-  const int samples_per_pixel = 100;
+  const int samples_per_pixel = 500;
   const int max_depth = 50;
 
   camera cam = camera_new_default();
 
   // world
   world w;
-  w.n_objects = 2;
+  w.n_objects = 4;
+
 
   // materials
-  material mat_lambert_1 = {
-    1,
-    vec3_new(1.0, 0.0, 1.0)
+  material mat_ground = {
+    MAT_LAMBERT,
+    vec3_new(0.8, 0.8, 0.0)
   };
 
-  sphere sphere1 =
+  material mat_center = {
+    MAT_LAMBERT,
+    vec3_new(0.7, 0.3, 0.3)
+  };
+
+  material mat_left = {
+    MAT_METAL,
+    vec3_new(0.8, 0.8, 0.8)
+  };
+
+  material mat_right = {
+    MAT_METAL,
+    vec3_new(0.8, 0.6, 0.2)
+  };
+
+  sphere ground =
   {
-    vec3_new(0, 0, -1),
+    vec3_new(0.0, -100.5, -1.0),
+    100.0,
+    mat_ground
+  };
+
+  sphere center =
+  {
+    vec3_new(0.0, 0.0, -1.0),
     0.5,
-    mat_lambert_1
+    mat_center
   };
 
-  sphere sphere2 =
+  sphere left =
   {
-    vec3_new(0, -100.5, -1),
-    100,
-    mat_lambert_1
+    vec3_new(-1.0, 0.0, -1.0),
+    0.5,
+    mat_left
   };
 
-  w.spheres = (sphere[]) {sphere1, sphere2};
+  sphere right =
+  {
+    vec3_new(1.0, 0.0, -1.0),
+    0.5,
+    mat_right
+  };
+
+  w.spheres = (sphere[]) {ground, center, left, right};
 
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
