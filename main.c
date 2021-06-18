@@ -225,6 +225,9 @@ typedef struct material material;
 struct material {
   int type;
   vec3 albedo;
+
+  // metal
+  double fuzz;
 };
 
 typedef struct hit_record hit_record;
@@ -328,7 +331,7 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, ray* scattered_ray)
 
     case MAT_METAL:
       vec3 reflected = reflect(vec3_unit_vector(in_ray.direction), normal);
-      *scattered_ray = ray_new(at, reflected);
+      *scattered_ray = ray_new(at, vec3_add(reflected, vec3_scale(vec3_random_in_unit_sphere(), mat.fuzz)));
       ret = (vec3_dot(scattered_ray->direction, normal) > 0);
       break;
   }
@@ -478,22 +481,26 @@ int main()
   // materials
   material mat_ground = {
     MAT_LAMBERT,
-    vec3_new(0.8, 0.8, 0.0)
+    vec3_new(0.8, 0.8, 0.0),
+    0.0
   };
 
   material mat_center = {
     MAT_LAMBERT,
-    vec3_new(0.7, 0.3, 0.3)
+    vec3_new(0.7, 0.3, 0.3),
+    0.0
   };
 
   material mat_left = {
     MAT_METAL,
-    vec3_new(0.8, 0.8, 0.8)
+    vec3_new(0.8, 0.8, 0.8),
+    0.3
   };
 
   material mat_right = {
     MAT_METAL,
-    vec3_new(0.8, 0.6, 0.2)
+    vec3_new(0.8, 0.6, 0.2),
+    0.0
   };
 
   sphere ground =
