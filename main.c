@@ -200,6 +200,14 @@ vec3 reflect(vec3 vec, vec3 normal)
   return vec3_subtract(vec, vec3_scale(normal, 2*vec3_dot(vec, normal)));
 }
 
+vec3 refract(vec3 uv, vec3 n, double etai_over_etat)
+{
+  double cos_theta = fmin(vec3_dot(vec3_neg(uv), n), 1.0);
+  vec3 r_out_perp = vec3_scale(vec3_add(uv, vec3_scale(n, cos_theta)), etai_over_etat);
+  vec3 r_out_parl = vec3_scale(n, -sqrt(fabs(1.0-vec3_length_squared(r_out_perp))));
+  return vec3_add(r_out_perp, r_out_parl);
+}
+
 typedef struct ray
 {
   vec3 origin;
@@ -219,7 +227,7 @@ ray ray_new(vec3 origin, vec3 direction)
   return ret;
 }
 
-enum { MAT_LAMBERT, MAT_METAL };
+enum { MAT_LAMBERT, MAT_METAL, MAT_DIELECTRIC };
 
 typedef struct material material;
 struct material {
@@ -228,6 +236,9 @@ struct material {
 
   // metal
   double fuzz;
+
+  // dielectric
+  double ir;
 };
 
 typedef struct hit_record hit_record;
@@ -248,10 +259,11 @@ struct sphere
   material mat;
 };
 
-vec3 sphere_hit_set_face_normal(ray r, vec3 outward_normal)
+int sphere_hit_set_face_normal(ray r, vec3 outward_normal, vec3* front_face)
 {
   int is_front_face = vec3_dot(r.direction, outward_normal) < 0;
-  return is_front_face ? outward_normal : vec3_neg(outward_normal);
+  *front_face = is_front_face ? outward_normal : vec3_neg(outward_normal);
+  return is_front_face;
 }
 
 int hit_sphere(
@@ -280,7 +292,7 @@ int hit_sphere(
   hit->t = root;
   hit->p = ray_point_at(r, root);
   vec3 outward_normal = vec3_unit_vector(vec3_subtract(ray_point_at(r, root), s.center));
-  hit->normal = sphere_hit_set_face_normal(r,  outward_normal);
+  hit->front_face = sphere_hit_set_face_normal(r,  outward_normal, &(hit->normal));
   hit->mat = s.mat;
   return 1;
 }
@@ -314,7 +326,7 @@ struct world
   sphere* spheres;
 };
 
-int scatter(ray in_ray, vec3 at, vec3 normal, material mat, ray* scattered_ray)
+int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray* scattered_ray)
 {
   int ret;
   switch (mat.type)
@@ -334,6 +346,12 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, ray* scattered_ray)
       *scattered_ray = ray_new(at, vec3_add(reflected, vec3_scale(vec3_random_in_unit_sphere(), mat.fuzz)));
       ret = (vec3_dot(scattered_ray->direction, normal) > 0);
       break;
+
+    case MAT_DIELECTRIC:
+      double refraction_ratio = front_face ? (1.0/mat.ir) : mat.ir;
+      vec3 refracted = refract(vec3_unit_vector(in_ray.direction), normal, refraction_ratio);
+      *scattered_ray = ray_new(at, refracted);
+      ret = 1;
   }
   return ret;
 }
@@ -369,7 +387,7 @@ vec3 ray_color(ray r, world w, int depth)
   if (hit == 1)
   {
     ray scattered_ray;
-    int did_the_ray_scatter = scatter(r, min_rec.p, min_rec.normal, min_rec.mat, &scattered_ray);
+    int did_the_ray_scatter = scatter(r, min_rec.p, min_rec.normal, min_rec.mat, min_rec.front_face, &scattered_ray);
     if (did_the_ray_scatter)
     {
       return vec3_elementwise_multiply(
@@ -468,8 +486,8 @@ int main()
   const int image_width = 400;
   const int image_height = (int) (image_width / aspect_ratio);
 
-  const int samples_per_pixel = 500;
-  const int max_depth = 50;
+  const int samples_per_pixel = 100;
+  const int max_depth = 30;
 
   camera cam = camera_new_default();
 
@@ -482,24 +500,28 @@ int main()
   material mat_ground = {
     MAT_LAMBERT,
     vec3_new(0.8, 0.8, 0.0),
+    0.0,
     0.0
   };
 
   material mat_center = {
-    MAT_LAMBERT,
-    vec3_new(0.7, 0.3, 0.3),
-    0.0
+    MAT_DIELECTRIC,
+    vec3_new(1.0, 1.0, 1.0),
+    0.0,
+    1.5
   };
 
   material mat_left = {
-    MAT_METAL,
-    vec3_new(0.8, 0.8, 0.8),
-    0.3
+    MAT_DIELECTRIC,
+    vec3_new(1.0, 1.0, 1.0),
+    0.3,
+    1.2
   };
 
   material mat_right = {
     MAT_METAL,
     vec3_new(0.8, 0.6, 0.2),
+    0.0,
     0.0
   };
 
