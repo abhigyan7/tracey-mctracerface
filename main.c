@@ -349,8 +349,18 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray*
 
     case MAT_DIELECTRIC:
       double refraction_ratio = front_face ? (1.0/mat.ir) : mat.ir;
-      vec3 refracted = refract(vec3_unit_vector(in_ray.direction), normal, refraction_ratio);
-      *scattered_ray = ray_new(at, refracted);
+      vec3 unit_direction = vec3_unit_vector(in_ray.direction);
+      double cos_theta = fmin(vec3_dot(vec3_neg(unit_direction), normal), 1.0);
+      double sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+      int cannot_refract = refraction_ratio * sin_theta > 1.0;
+
+      vec3 new_ray;
+      if (cannot_refract)
+        new_ray = reflect(unit_direction, normal);
+      else
+        new_ray = refract(unit_direction, normal, refraction_ratio);
+      *scattered_ray = ray_new(at, new_ray);
       ret = 1;
   }
   return ret;
