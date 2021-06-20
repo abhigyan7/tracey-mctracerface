@@ -326,6 +326,13 @@ struct world
   sphere* spheres;
 };
 
+double reflectance(double cosine, double ref_idx)
+{
+  double r0 = (1-ref_idx) / (1+ref_idx);
+  r0 = r0*r0;
+  return r0 + (1-r0)*pow((1 - cosine), 5);
+}
+
 int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray* scattered_ray)
 {
   int ret;
@@ -356,7 +363,7 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray*
       int cannot_refract = refraction_ratio * sin_theta > 1.0;
 
       vec3 new_ray;
-      if (cannot_refract)
+      if (cannot_refract || reflectance(cos_theta, refraction_ratio) > random_double())
         new_ray = reflect(unit_direction, normal);
       else
         new_ray = refract(unit_direction, normal, refraction_ratio);
@@ -515,8 +522,8 @@ int main()
   };
 
   material mat_center = {
-    MAT_DIELECTRIC,
-    vec3_new(1.0, 1.0, 1.0),
+    MAT_LAMBERT,
+    vec3_new(0.1, 0.2, 0.5),
     0.0,
     1.5
   };
