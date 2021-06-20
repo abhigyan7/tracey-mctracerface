@@ -362,12 +362,12 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray*
 
       int cannot_refract = refraction_ratio * sin_theta > 1.0;
 
-      vec3 new_ray;
+      vec3 direction;
       if (cannot_refract || reflectance(cos_theta, refraction_ratio) > random_double())
-        new_ray = reflect(unit_direction, normal);
+        direction = reflect(unit_direction, normal);
       else
-        new_ray = refract(unit_direction, normal, refraction_ratio);
-      *scattered_ray = ray_new(at, new_ray);
+        direction = refract(unit_direction, normal, refraction_ratio);
+      *scattered_ray = ray_new(at, direction);
       ret = 1;
   }
   return ret;
@@ -510,7 +510,7 @@ int main()
 
   // world
   world w;
-  w.n_objects = 4;
+  w.n_objects = 5;
 
 
   // materials
@@ -531,8 +531,8 @@ int main()
   material mat_left = {
     MAT_DIELECTRIC,
     vec3_new(1.0, 1.0, 1.0),
-    0.3,
-    1.2
+    0.0,
+    1.5
   };
 
   material mat_right = {
@@ -563,6 +563,13 @@ int main()
     mat_left
   };
 
+  sphere left_inside =
+  {
+    vec3_new(-1.0, 0.0, -1.0),
+    -0.4,
+    mat_left
+  };
+
   sphere right =
   {
     vec3_new(1.0, 0.0, -1.0),
@@ -570,7 +577,7 @@ int main()
     mat_right
   };
 
-  w.spheres = (sphere[]) {ground, center, left, right};
+  w.spheres = (sphere[]) {ground, center, left, left_inside, right};
 
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
