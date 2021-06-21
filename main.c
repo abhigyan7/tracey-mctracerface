@@ -433,6 +433,7 @@ vec3 ray_color(ray r, world w, int depth)
 
 typedef struct camera
 {
+  double theta, h;
   double aspect_ratio;
   int image_width, image_height;
 
@@ -447,8 +448,10 @@ typedef struct camera
 camera camera_new_default()
 {
   camera ret;
+  ret.theta = degrees_to_radians(90.0);
+  ret.h = tan(ret.theta/2);
   ret.aspect_ratio = 16.0 / 9.0;
-  ret.viewport_height = 2.0;
+  ret.viewport_height = 2.0 * ret.h;
   ret.viewport_width = ret.aspect_ratio * ret.viewport_height;
   ret.focal_length = 1.0;
 
@@ -510,7 +513,7 @@ int main()
 
   // world
   world w;
-  w.n_objects = 5;
+  w.n_objects = 4;
 
 
   // materials
@@ -529,15 +532,15 @@ int main()
   };
 
   material mat_left = {
-    MAT_DIELECTRIC,
-    vec3_new(1.0, 1.0, 1.0),
+    MAT_LAMBERT,
+    vec3_new(0.0, 0.0, 1.0),
     0.0,
     1.5
   };
 
   material mat_right = {
     MAT_METAL,
-    vec3_new(0.8, 0.6, 0.2),
+    vec3_new(1.0, 0.0, 0.0),
     0.0,
     0.0
   };
@@ -563,13 +566,6 @@ int main()
     mat_left
   };
 
-  sphere left_inside =
-  {
-    vec3_new(-1.0, 0.0, -1.0),
-    -0.4,
-    mat_left
-  };
-
   sphere right =
   {
     vec3_new(1.0, 0.0, -1.0),
@@ -577,7 +573,7 @@ int main()
     mat_right
   };
 
-  w.spheres = (sphere[]) {ground, center, left, left_inside, right};
+  w.spheres = (sphere[]) {ground, center, left, right};
 
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
