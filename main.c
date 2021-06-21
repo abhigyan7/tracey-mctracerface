@@ -345,10 +345,11 @@ double reflectance(double cosine, double ref_idx)
 
 int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray* scattered_ray)
 {
-  int ret;
+  int ret = 0;
   switch (mat.type)
   {
     case MAT_LAMBERT:
+    {
       vec3 scatter_direction = vec3_add(normal, vec3_random_unit_vector());
       if (vec3_near_zero(scatter_direction))
       {
@@ -357,18 +358,23 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray*
       *scattered_ray = ray_new(at, scatter_direction);
       ret = 1;
       break;
+    }
 
     case MAT_METAL:
+    {
       vec3 reflected = reflect(vec3_unit_vector(in_ray.direction), normal);
       *scattered_ray = ray_new(at, vec3_add(reflected, vec3_scale(vec3_random_in_unit_sphere(), mat.fuzz)));
       ret = (vec3_dot(scattered_ray->direction, normal) > 0);
       break;
+    }
 
     case MAT_DIELECTRIC:
+    {
       double refraction_ratio = front_face ? (1.0/mat.ir) : mat.ir;
       vec3 unit_direction = vec3_unit_vector(in_ray.direction);
       double cos_theta = fmin(vec3_dot(vec3_neg(unit_direction), normal), 1.0);
       double sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
 
       int cannot_refract = refraction_ratio * sin_theta > 1.0;
 
@@ -379,6 +385,7 @@ int scatter(ray in_ray, vec3 at, vec3 normal, material mat, int front_face, ray*
         direction = refract(unit_direction, normal, refraction_ratio);
       *scattered_ray = ray_new(at, direction);
       ret = 1;
+    }
   }
   return ret;
 }
@@ -394,6 +401,7 @@ vec3 ray_color(ray r, world w, int depth)
 
   double min_t = 100000;
   hit_record min_rec;
+  min_rec.front_face = -1;
 
   int hit = 0;
 
@@ -460,16 +468,16 @@ typedef struct camera
 camera camera_new_default()
 {
   camera ret;
-  vec3 lookfrom = vec3_new(3, 3, 2);
-  vec3 lookat = vec3_new(0, 0, -1);
+  vec3 lookfrom = vec3_new(13, 2, 3);
+  vec3 lookat = vec3_new(0, 0, 0);
   vec3 vup = vec3_new(0, 1, 0);
 
-  double dist_to_focus = vec3_length(vec3_subtract(lookfrom, lookat));
-  double aperture = 2.0;
+  double dist_to_focus = 10;
+  double aperture = 0.1;
 
   ret.theta = degrees_to_radians(20.0);
   ret.h = tan(ret.theta/2);
-  ret.aspect_ratio = 16.0 / 9.0;
+  ret.aspect_ratio = 3.0 / 2.0;
   ret.viewport_height = 2.0 * ret.h;
   ret.viewport_width = ret.aspect_ratio * ret.viewport_height;
   ret.lens_radius = aperture / 2.0;
@@ -522,88 +530,124 @@ ray camera_get_ray(camera cam, double s, double t)
   return ret;
 }
 
+void random_scene(world* w)
+{
+  material mat_ground = {MAT_LAMBERT,vec3_new(0.5, 0.5, 0.5), 0, 0};
+  sphere ground = {vec3_new(0, -1000, 0), 1000, mat_ground};
+  w->spheres[0] = ground;
+
+  int index = 1;
+
+  for (int a = -11; a < 11; a++)
+  {
+    for (int b = -11; b <11; b++)
+    {
+      double choose_material = random_double();
+      vec3 center = vec3_new(a + 0.9*random_double(), 0.2, b+0.9*random_double());
+
+      if (vec3_length(vec3_subtract(center, vec3_new(4, 0.2, 0))) > 0.9)
+      {
+        material sphere_material;
+
+        if (choose_material < 0.8)
+        {
+          // diffuse
+          vec3 albedo = vec3_elementwise_multiply(vec3_random_unit_vector(), vec3_random_unit_vector());
+          sphere_material.type = MAT_LAMBERT;
+          sphere_material.albedo = albedo;
+          sphere_material.fuzz = 0;
+          sphere_material.ir = 0;
+        } else if (choose_material < 0.95) {
+          vec3 albedo = vec3_random_uniform(0.5, 1.0);
+          double fuzz = random_double(0, 0.5);
+          sphere_material.type = MAT_METAL;
+          sphere_material.albedo = albedo;
+          sphere_material.fuzz = fuzz;
+          sphere_material.ir = 0;
+        } else {
+          sphere_material.type = MAT_DIELECTRIC;
+          sphere_material.albedo = vec3_new(1, 1, 1);
+          sphere_material.ir = 1.5;
+          sphere_material.fuzz = 0;
+        }
+
+        sphere sphere_to_add;
+        sphere_to_add.center = center;
+        sphere_to_add.mat= sphere_material;
+        sphere_to_add.radius = 0.2;
+        w->spheres[index] = sphere_to_add;
+        index++;
+      }
+    }
+  }
+
+  material mat_1;
+  mat_1.type = MAT_DIELECTRIC;
+  mat_1.albedo = vec3_new(1, 1, 1);
+  mat_1.ir = 1.5;
+  mat_1.fuzz = 0;
+
+  sphere sph_1;
+  sph_1.center = vec3_new(0, 1, 0);
+  sph_1.mat = mat_1;
+  sph_1.radius = 1.0;
+
+  w->spheres[index++] = sph_1;
+
+  material mat_2;
+  mat_2.type = MAT_LAMBERT;
+  mat_2.albedo = vec3_new(0.4, 0.2, 0.1);
+  mat_2.ir = 0; mat_2.fuzz = 0;
+
+  sphere sph_2;
+  sph_2.center = vec3_new(-4, 1, 0);
+  sph_2.mat = mat_2;
+  sph_2.radius = 1.0;
+
+  w->spheres[index++] = sph_2;
+
+  material mat_3;
+  mat_3.type = MAT_METAL;
+  mat_3.albedo = vec3_new(0.7, 0.6, 0.5);
+  mat_3.fuzz = 0.0;
+  mat_3.ir = 0;
+
+  sphere sph_3;
+  sph_3.center = vec3_new(4, 1, 0);
+  sph_3.mat = mat_3;
+  sph_3.radius = 1.0;
+
+  w->spheres[index++] = sph_3;
+
+  w->n_objects = index;
+
+}
+
 int main()
 {
   // image
-  const double aspect_ratio = 16.0 / 9.0;
-  const int image_width = 400;
+  const double aspect_ratio = 3.0 / 2.0;
+  const int image_width = 1200;
   const int image_height = (int) (image_width / aspect_ratio);
 
-  const int samples_per_pixel = 100;
-  const int max_depth = 30;
+  const int samples_per_pixel = 500;
+  const int max_depth = 60;
 
   camera cam = camera_new_default();
 
+  srand(42);
+
   // world
   world w;
-  w.n_objects = 4;
-
-
-  // materials
-  material mat_ground = {
-    MAT_LAMBERT,
-    vec3_new(0.8, 0.8, 0.0),
-    0.0,
-    0.0
-  };
-
-  material mat_center = {
-    MAT_LAMBERT,
-    vec3_new(0.1, 0.2, 0.5),
-    0.0,
-    1.5
-  };
-
-  material mat_left = {
-    MAT_DIELECTRIC,
-    vec3_new(1.0, 1.0, 1.0),
-    0.0,
-    1.5
-  };
-
-  material mat_right = {
-    MAT_METAL,
-    vec3_new(0.8, 0.6, 0.2),
-    0.0,
-    0.0
-  };
-
-  sphere ground =
-  {
-    vec3_new(0.0, -100.5, -1.0),
-    100.0,
-    mat_ground
-  };
-
-  sphere center =
-  {
-    vec3_new(0.0, 0.0, -1.0),
-    0.5,
-    mat_center
-  };
-
-  sphere left =
-  {
-    vec3_new(-1.0, 0.0, -1.0),
-    0.5,
-    mat_left
-  };
-
-  sphere right =
-  {
-    vec3_new(1.0, 0.0, -1.0),
-    0.5,
-    mat_right
-  };
-
-  w.spheres = (sphere[]) {ground, center, left, right};
+  w.spheres = malloc(sizeof(sphere)*485);
+  random_scene(&w);
 
   printf("P3\n%d %d\n255\n", image_width, image_height);
 
   for (int j = image_height-1; j>=0; --j)
   {
-    fprintf(stderr, "Line %d of %d.\r", image_height-j, image_height);
-    fflush(stderr);
+    fprintf(stderr, "Line %d of %d.\n", image_height-j, image_height);
+    //fflush(stderr);
     for (int i = 0; i<image_width; ++i)
     {
       vec3 px_color = vec3_new_zero();
