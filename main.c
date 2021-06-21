@@ -190,6 +190,16 @@ vec3 vec3_random_in_unit_hemisphere(vec3 normal)
   return ret;
 }
 
+vec3 vec3_random_in_unit_disc()
+{
+  while (1)
+  {
+    vec3 p = vec3_new(random_double(-1, 1), random_double(-1, 1), 0);
+    if (vec3_length_squared(p) >= 1) continue;
+    return p;
+  }
+}
+
 int vec3_near_zero(vec3 v)
 {
   return ((fabs(v.x) < eps) && (fabs(v.y) < eps) && (fabs(v.z) < eps));
@@ -437,6 +447,9 @@ typedef struct camera
   double aspect_ratio;
   int image_width, image_height;
 
+  vec3 u, v, w;
+  double lens_radius;
+
   double viewport_height, viewport_width;
 
   vec3 origin;
@@ -447,23 +460,27 @@ typedef struct camera
 camera camera_new_default()
 {
   camera ret;
-  vec3 lookfrom = vec3_new(-2, 2, 1);
+  vec3 lookfrom = vec3_new(3, 3, 2);
   vec3 lookat = vec3_new(0, 0, -1);
   vec3 vup = vec3_new(0, 1, 0);
 
-  ret.theta = degrees_to_radians(90.0);
+  double dist_to_focus = vec3_length(vec3_subtract(lookfrom, lookat));
+  double aperture = 2.0;
+
+  ret.theta = degrees_to_radians(20.0);
   ret.h = tan(ret.theta/2);
   ret.aspect_ratio = 16.0 / 9.0;
   ret.viewport_height = 2.0 * ret.h;
   ret.viewport_width = ret.aspect_ratio * ret.viewport_height;
+  ret.lens_radius = aperture / 2.0;
 
-  vec3 w = vec3_unit_vector(vec3_subtract(lookfrom, lookat));
-  vec3 u = vec3_unit_vector(vec3_cross(vup, w));
-  vec3 v = vec3_cross(w, u);
+  ret.w = vec3_unit_vector(vec3_subtract(lookfrom, lookat));
+  ret.u = vec3_unit_vector(vec3_cross(vup, ret.w));
+  ret.v = vec3_cross(ret.w, ret.u);
 
   ret.origin = lookfrom;
-  ret.horizontal = vec3_scale(u, ret.viewport_width);
-  ret.vertical = vec3_scale(v, ret.viewport_height);
+  ret.horizontal = vec3_scale(ret.u, ret.viewport_width * dist_to_focus);
+  ret.vertical = vec3_scale(ret.v, ret.viewport_height * dist_to_focus);
 
   // origin - 0.5*horizontal - 0.5*vertical - origin_to_image_plane_center
   ret.lower_left_corner = vec3_add(
@@ -473,24 +490,29 @@ camera camera_new_default()
           vec3_scale(ret.horizontal, 0.5),
           vec3_scale(ret.vertical, 0.5)
         ),
-       w
+       vec3_scale(ret.w, dist_to_focus)
       )
     )
   );
+
   return ret;
 }
 
 ray camera_get_ray(camera cam, double s, double t)
 {
   ray ret;
-  ret.origin = cam.origin;
+
+  vec3 rd = vec3_scale(vec3_random_in_unit_disc(), cam.lens_radius);
+  vec3 offset = vec3_add(vec3_scale(cam.u, rd.x), vec3_scale(cam.v, rd.y));
+
+  ret.origin = vec3_add(cam.origin, offset);
 
   // lower_left_corner + u*horizontal + v*vertical - origin
   ret.direction = vec3_add(
     vec3_add(
       vec3_add(
         vec3_scale(cam.horizontal, s),
-        vec3_neg(cam.origin)
+        vec3_neg(vec3_add(cam.origin, offset))
       ),
       vec3_scale(cam.vertical, t)
     ),
